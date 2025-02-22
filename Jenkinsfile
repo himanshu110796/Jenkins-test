@@ -18,7 +18,7 @@ pipeline {
                     // Get latest commit author and email, ensuring clean output
                     env.GIT_AUTHOR = powershell(script: '(git log -1 --pretty=format:"%an").Trim()', returnStdout: true).trim()
                     env.GIT_AUTHOR_EMAIL = powershell(script: '(git log -1 --pretty=format:"%ae").Trim()', returnStdout: true).trim()
-
+                    env.GIT_COMMIT_MESSAGE = powershell(script: '(git log -1 --pretty=format:"%s").Trim()', returnStdout: true).trim()
                     echo "Latest Commit Author: ${env.GIT_AUTHOR}"
                     echo "Latest Commit Author Email: ${env.GIT_AUTHOR_EMAIL}"
 
@@ -88,7 +88,7 @@ pipeline {
                         <p>The Jenkins build for <b>${JOB_NAME}</b> (#${BUILD_NUMBER}) was successful.</p>
                         <p><b>Triggered by:</b> ${BUILD_USER}</p>
                         <p><b>Latest Commit:</b> ${GIT_AUTHOR}</p>
-                        <p><b>Commit Email:</b> ${GIT_AUTHOR_EMAIL}</p>
+                        <p><b>Commit Message:</b> ${GIT_COMMIT_MESSAGE}</p>
                         <p>Check the build details here: <a href="${BUILD_URL}">${BUILD_URL}</a></p>
                     </body>
                 </html>""",
@@ -107,7 +107,7 @@ pipeline {
                         <p>The Jenkins build for <b>${JOB_NAME}</b> (#${BUILD_NUMBER}) has failed.</p>
                         <p><b>Triggered by:</b> ${BUILD_USER}</p>
                         <p><b>Latest Commit:</b> ${GIT_AUTHOR}</p>
-                        <p><b>Commit Email:</b> ${GIT_AUTHOR_EMAIL}</p>
+                        <p><b>Commit Message:</b> ${GIT_COMMIT_MESSAGE}</p>
                         <p>Please check the logs: <a href="${BUILD_URL}">${BUILD_URL}</a></p>
                     </body>
                 </html>""",
