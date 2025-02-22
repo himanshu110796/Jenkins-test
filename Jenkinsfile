@@ -15,39 +15,47 @@ pipeline {
             steps {
                 git branch: 'main', url: 'https://github.com/himanshu110796/Jenkins-test'
                 script {
-                    // Get latest commit author and email
+                    // Get the latest commit author name and email
                     env.GIT_AUTHOR = bat(script: 'git log -1 --pretty=format:"%%an"', returnStdout: true).trim()
                     env.GIT_AUTHOR_EMAIL = bat(script: 'git log -1 --pretty=format:"%%ae"', returnStdout: true).trim()
 
                     echo "Latest Commit Author: ${env.GIT_AUTHOR}"
                     echo "Latest Commit Author Email: ${env.GIT_AUTHOR_EMAIL}"
 
-                    // Fetch GitHub primary email of the author
-                    def jsonFile = "git_emails.json"
+                    // Extract GitHub username from the commit email (if it's a GitHub email)
+                    def githubUsername = ""
+                    if (env.GIT_AUTHOR_EMAIL.contains("@users.noreply.github.com")) {
+                        githubUsername = env.GIT_AUTHOR_EMAIL.split("@")[0].split("+")[1]
+                    }
 
-                    bat(script: """
-                        curl -s -H "Authorization: token %GITHUB_PAT%" ^
-                        "https://api.github.com/user/emails" ^
-                        --compressed --max-time 10 > ${jsonFile}
-                    """)
+                    if (githubUsername) {
+                        // Fetch commit author's public email from GitHub API
+                        def jsonFile = "git_author_emails.json"
+                        
+                        bat(script: """
+                            curl -s -H "Authorization: token %GITHUB_PAT%" ^
+                            "https://api.github.com/users/${githubUsername}" ^
+                            --compressed --max-time 10 > ${jsonFile}
+                        """)
 
-                    script {
-                        // Read JSON and get primary email
-                        def primaryEmail = powershell(script: """
-                            try {
-                                \$jsonContent = Get-Content ${jsonFile} -Raw
-                                \$data = \$jsonContent | ConvertFrom-Json
-                                \$primaryEmail = (\$data | Where-Object { \$_.primary -eq \$true }).email
-                                if (-not \$primaryEmail) { \$primaryEmail = "no-email-found@example.com" }
-                                Write-Output \$primaryEmail
-                            } catch {
-                                Write-Output "no-email-found@example.com"
+                        script {
+                            // Read JSON from file and parse it to get the public email
+                            def email = powershell(script: """
+                                try {
+                                    \$jsonContent = Get-Content ${jsonFile} -Raw
+                                    \$data = \$jsonContent | ConvertFrom-Json
+                                    \$publicEmail = \$data.email
+                                    if (-not \$publicEmail) { \$publicEmail = "no-email-found@example.com" }
+                                    Write-Output \$publicEmail
+                                } catch {
+                                    Write-Output "no-email-found@example.com"
+                                }
+                            """, returnStdout: true).trim()
+
+                            // Override GIT_AUTHOR_EMAIL with the primary/public email if found
+                            if (email != "no-email-found@example.com") {
+                                env.GIT_AUTHOR_EMAIL = email
                             }
-                        """, returnStdout: true).trim()
-
-                        // Override GIT_AUTHOR_EMAIL with primary email
-                        if (primaryEmail != "no-email-found@example.com") {
-                            env.GIT_AUTHOR_EMAIL = primaryEmail
                         }
                     }
 
