@@ -8,16 +8,16 @@ pipeline {
     }
     environment {
         BUILD_USER = bat(script: "echo %USERNAME%", returnStdout: true).trim().replaceAll('(?s)^.*?\r?\n', '')
-        GITHUB_PAT = credentials('github-pat')  // Your GitHub Personal Access Token stored in Jenkins
+        GITHUB_PAT = credentials('github-pat')  // GitHub Personal Access Token stored in Jenkins
     }
     stages {
         stage('Clone Repository') {
             steps {
                 git branch: 'main', url: 'https://github.com/himanshu110796/Jenkins-test'
                 script {
-                    // Get the latest commit author name and email
-                    env.GIT_AUTHOR = bat(script: 'git log -1 --pretty=format:"%%an"', returnStdout: true).trim()
-                    env.GIT_AUTHOR_EMAIL = bat(script: 'git log -1 --pretty=format:"%%ae"', returnStdout: true).trim()
+                    // Get latest commit author and email, ensuring clean output
+                    env.GIT_AUTHOR = powershell(script: '(git log -1 --pretty=format:"%an").Trim()', returnStdout: true).trim()
+                    env.GIT_AUTHOR_EMAIL = powershell(script: '(git log -1 --pretty=format:"%ae").Trim()', returnStdout: true).trim()
 
                     echo "Latest Commit Author: ${env.GIT_AUTHOR}"
                     echo "Latest Commit Author Email: ${env.GIT_AUTHOR_EMAIL}"
@@ -25,7 +25,7 @@ pipeline {
                     // Extract GitHub username from the commit email (if it's a GitHub email)
                     def githubUsername = ""
                     if (env.GIT_AUTHOR_EMAIL.contains("@users.noreply.github.com")) {
-                        githubUsername = env.GIT_AUTHOR_EMAIL.split("@")[0].split("+")[1]
+                        githubUsername = env.GIT_AUTHOR_EMAIL.split("@")[0].split("\\+")[1]
                     }
 
                     if (githubUsername) {
