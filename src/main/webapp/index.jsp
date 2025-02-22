@@ -2,6 +2,6 @@
 <body>
 <h2><%= "Hello World from Jenkins!" %></h2>
 <h3>This is java web app home page of Jenkins Test</h3>
-<h2>This is from Github with Jenkins Pipeline With other's id.</h2>
+<h2>This is from Github with Jenkins Pipeline With other's system.</h2>
 </body>
 </html>
