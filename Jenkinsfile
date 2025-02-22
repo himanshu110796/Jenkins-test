@@ -1,4 +1,4 @@
-pipeline {
+					pipeline {
     agent any
     tools {
         maven 'Maven'
@@ -8,42 +8,50 @@ pipeline {
     }
     environment {
         BUILD_USER = bat(script: "echo %USERNAME%", returnStdout: true).trim().replaceAll('(?s)^.*?\r?\n', '')
+        GITHUB_PAT = credentials('github-pat')  // Your GitHub Personal Access Token stored in Jenkins
     }
     stages {
         stage('Clone Repository') {
             steps {
                 git branch: 'main', url: 'https://github.com/himanshu110796/Jenkins-test'
                 script {
-                    env.GIT_AUTHOR = bat(script: 'git log -1 --pretty=format:"%%an"', returnStdout: true).trim().replaceAll('(?s)^.*?\r?\n', '')
-                    env.GIT_COMMITTER_USERNAME = bat(script: 'git log -1 --pretty=format:"%%ae"', returnStdout: true).trim().replaceAll('(?s)^.*?\r?\n', '')
+                    // Get latest commit author and email
+                    env.GIT_AUTHOR = bat(script: 'git log -1 --pretty=format:"%%an"', returnStdout: true).trim()
+                    env.GIT_AUTHOR_EMAIL = bat(script: 'git log -1 --pretty=format:"%%ae"', returnStdout: true).trim()
 
-                    withCredentials([string(credentialsId: 'github-pat', variable: 'GITHUB_PAT')]) {
-                        def jsonFile = "git_emails.json"
+                    echo "Latest Commit Author: ${env.GIT_AUTHOR}"
+                    echo "Latest Commit Author Email: ${env.GIT_AUTHOR_EMAIL}"
 
-                        // Fetch GitHub user email and store it in a file
-                        bat(script: """
-                            curl -s -H "Authorization: token %GITHUB_PAT%" ^
-                            "https://api.github.com/user/emails" ^
-                            --compressed --max-time 10 > ${jsonFile}
-                        """)
+                    // Fetch GitHub primary email of the author
+                    def jsonFile = "git_emails.json"
 
-                        script {
-                            // Read JSON from file and parse it
-                            def email = powershell(script: """
-                                try {
-                                    \$jsonContent = Get-Content ${jsonFile} -Raw
-                                    \$data = \$jsonContent | ConvertFrom-Json
-                                    \$primaryEmail = (\$data | Where-Object { \$_.primary -eq \$true }).email
-                                    if (-not \$primaryEmail) { \$primaryEmail = "no-email-found@example.com" }
-                                    Write-Output \$primaryEmail
-                                } catch {
-                                    Write-Output "no-email-found@example.com"
-                                }
-                            """, returnStdout: true).trim()
+                    bat(script: """
+                        curl -s -H "Authorization: token %GITHUB_PAT%" ^
+                        "https://api.github.com/user/emails" ^
+                        --compressed --max-time 10 > ${jsonFile}
+                    """)
 
-                            env.GIT_COMMITTER_EMAIL = email
+                    script {
+                        // Read JSON and get primary email
+                        def primaryEmail = powershell(script: """
+                            try {
+                                \$jsonContent = Get-Content ${jsonFile} -Raw
+                                \$data = \$jsonContent | ConvertFrom-Json
+                                \$primaryEmail = (\$data | Where-Object { \$_.primary -eq \$true }).email
+                                if (-not \$primaryEmail) { \$primaryEmail = "no-email-found@example.com" }
+                                Write-Output \$primaryEmail
+                            } catch {
+                                Write-Output "no-email-found@example.com"
+                            }
+                        """, returnStdout: true).trim()
+
+                        // Override GIT_AUTHOR_EMAIL with primary email
+                        if (primaryEmail != "no-email-found@example.com") {
+                            env.GIT_AUTHOR_EMAIL = primaryEmail
                         }
                     }
+
+                    echo "Final Email to Use: ${env.GIT_AUTHOR_EMAIL}"
                 }
             }
         }
@@ -64,11 +72,6 @@ pipeline {
     }
     post {
         success {
-            script {
-                if (!env.GIT_COMMITTER_EMAIL || env.GIT_COMMITTER_EMAIL == "no-email-found@example.com") {
-                    env.GIT_COMMITTER_EMAIL = "fallback@example.com"
-                }
-            }
             emailext (
                 subject: "✅ SUCCESS: Jenkins Build - ${JOB_NAME} #${BUILD_NUMBER}",
                 body: """<html>
@@ -77,22 +80,17 @@ pipeline {
                         <p>The Jenkins build for <b>${JOB_NAME}</b> (#${BUILD_NUMBER}) was successful.</p>
                         <p><b>Triggered by:</b> ${BUILD_USER}</p>
                         <p><b>Latest Commit:</b> ${GIT_AUTHOR}</p>
-                        <p><b>Commit Email:</b> ${GIT_COMMITTER_EMAIL}</p>
+                        <p><b>Commit Email:</b> ${GIT_AUTHOR_EMAIL}</p>
                         <p>Check the build details here: <a href="${BUILD_URL}">${BUILD_URL}</a></p>
                     </body>
                 </html>""",
-                to: "${GIT_COMMITTER_EMAIL}",
+                to: "${GIT_AUTHOR_EMAIL}",
                 from: 'jenkins@example.com',
                 replyTo: 'jenkins@example.com',
                 mimeType: 'text/html'
             )
         }
         failure {
-            script {
-                if (!env.GIT_COMMITTER_EMAIL || env.GIT_COMMITTER_EMAIL == "no-email-found@example.com") {
-                    env.GIT_COMMITTER_EMAIL = "fallback@example.com"
-                }
-            }
             emailext (
                 subject: "❌ FAILURE: Jenkins Build - ${JOB_NAME} #${BUILD_NUMBER}",
                 body: """<html>
@@ -101,11 +99,11 @@ pipeline {
                         <p>The Jenkins build for <b>${JOB_NAME}</b> (#${BUILD_NUMBER}) has failed.</p>
                         <p><b>Triggered by:</b> ${BUILD_USER}</p>
                         <p><b>Latest Commit:</b> ${GIT_AUTHOR}</p>
-                        <p><b>Commit Email:</b> ${GIT_COMMITTER_EMAIL}</p>
+                        <p><b>Commit Email:</b> ${GIT_AUTHOR_EMAIL}</p>
                         <p>Please check the logs: <a href="${BUILD_URL}">${BUILD_URL}</a></p>
                     </body>
                 </html>""",
-                to: "${GIT_COMMITTER_EMAIL}",
+                to: "${GIT_AUTHOR_EMAIL}",
                 from: 'jenkins@example.com',
                 replyTo: 'jenkins@example.com',
                 mimeType: 'text/html'
